@@ -1,0 +1,73 @@
+---
+title: "Activity Analysis"
+author: "Mohamed Abed"
+output: html_document
+---
+
+
+Practical Machine Learning Assigment
+========================================================
+
+```{r}
+library(caret)
+```
+
+Loading and preprocessing the data
+===================================
+
+```{r echo=TRUE}
+rawdata<-read.csv("pml-training.csv",na.string=c("NA", ""))
+dim(rawdata)
+```
+The data frame has 19622 rows and 160 columns. Upon inspection of the raw data, it is noticed that about two thirds of the columns contain missing values and NAs. Those columns are then discarded to make the analysis faster.
+
+```{r echo=TRUE}
+cleandata <- rawdata[ ,! apply( rawdata , 2 , function(x) any(is.na(x)))]
+dim(cleandata)
+```
+
+The remaining dataframe has only 60 columns left.
+
+Analysis
+=========
+The dataframe is then partitioned into training and test sets.
+```{r echo=TRUE}
+set.seed(12345)
+inTrain <- createDataPartition(cleandata$classe, p=0.6, list=F)
+training <- cleandata[inTrain,]
+testing <- cleandata[-inTrain,]
+```
+
+4-fold cross-validation is then used as the resampling scheme and the Random Forest Model is fitted.
+```{r echo=TRUE}
+ctrl <- trainControl( method="cv", number=4)
+modelfit <- train(classe ~ ., data=training, model="rf", trControl=ctrl)
+print(modelfit$finalModel)
+```
+
+This random forest model is then used to predict the test set.
+```{r echo=TRUE}
+pred <- predict(modelfit, newdata=testing)
+sum(pred == testing$classe) / length(pred)
+confusionMatrix(testing$classe, pred)$table
+```
+
+It is noticed that the out of sample error is very close to 0%. This indicate that our model is correct. We then check which variables are most important.
+
+```{r echo=TRUE}
+varImp(modelfit)
+```
+To make the analysis faster, we use only the 10-most important variables in this model and use them to do a simpler random forest model.
+```{r echo=TRUE}
+smallData <- subset(cleandata, select=c(roll_belt, pitch_forearm, yaw_belt, magnet_dumbbell_y, pitch_belt, magnet_dumbbell_z, roll_forearm, accel_dumbbell_y, roll_dumbbell, magnet_dumbbell_x,classe))
+inTrain <- createDataPartition(smallData$classe, p=0.6, list=F)
+smallModel <- train(classe ~ ., data=smallData[inTrain,], model="rf", trControl=ctrl)
+print(smallModel$finalModel)
+smalltesting<-smallData[-inTrain,]
+smallpred<-predict(smallModel,newdata=smalltesting)
+sum(smallpred == smalltesting$classe) / length(smallpred)
+confusionMatrix(smalltesting$classe, smallpred)$table
+```
+
+This simpler random forest model is much faster than the original model and the out of sample error is close to 1.5%.
+
